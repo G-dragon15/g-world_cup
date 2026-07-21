@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World Cup Manager Game</title>
+  <style>
+    :root {
+      --primary: #0a3622;
+      --secondary: #157347;
+      --accent: #20c997;
+      --gold: #ffc107;
+      --bg: #f4f6f8;
+      --card-bg: #ffffff;
+      --pitch-green: #2d8a4e;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg);
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .game-container {
+      max-width: 800px;
+      width: 100%;
+      background: var(--card-bg);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    h1, h2 { text-align: center; color: var(--primary); margin-top: 0; }
+
+    .team-select-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .team-btn {
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .team-btn:hover {
+      border-color: var(--secondary);
+      background: #f0fff4;
+    }
+
+    .scoreboard {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background: var(--primary);
+      color: white;
+      padding: 15px;
+      border-radius: 8px 8px 0 0;
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .pitch-container {
+      position: relative;
+      width: 100%;
+      background-color: var(--pitch-green);
+      border-left: 2px solid white;
+      border-right: 2px solid white;
+      box-sizing: border-box;
+      display: flex;
+      justify-content: center;
+    }
+
+    canvas {
+      background-color: var(--pitch-green);
+      display: block;
+      max-width: 100%;
+    }
+
+    .match-log {
+      height: 120px;
+      border: 1px solid #ccc;
+      border-radius: 0 0 8px 8px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #111;
+      color: #00ff66;
+      font-family: monospace;
+      margin-bottom: 15px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    button.action-btn {
+      background: var(--secondary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button.action-btn:hover { background: var(--primary); }
+
+    .tactics-box {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin: 15px 0;
+    }
+
+    .tactic-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--secondary);
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .tactic-btn.active {
+      background: var(--secondary);
+      color: white;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="game-container">
+    <h1>🏆 World Cup Manager</h1>
+
+    <div id="screen-select">
+      <h2>Select Your National Team</h2>
+      <div id="team-grid" class="team-select-grid"></div>
+    </div>
+
+    <div id="screen-match" class="hidden">
+      <h2 id="stage-title">Group Stage Match</h2>
+      
+      <div class="scoreboard">
+        <span id="home-team-display">Home</span>
+        <span id="score-display">0 - 0</span>
+        <span id="away-team-display">Away</span>
+      </div>
+
+      <div class="pitch-container">
+        <canvas id="pitch" width="600" height="320"></canvas>
+      </div>
+
+      <div class="match-log" id="match-log"></div>
+
+      <div style="text-align: center; margin-bottom: 10px;">
+        <strong>Time: <span id="timer-display">0</span>' | Possession: <span id="poss-display">None</span></strong>
+      </div>
+
+      <div class="tactics-box">
+        <span>Tactic:</span>
+        <button class="tactic-btn" onclick="setTactic('Defensive')">Defensive</button>
+        <button class="tactic-btn active" onclick="setTactic('Balanced')">Balanced</button>
+        <button class="tactic-btn" onclick="setTactic('Attacking')">Attacking</button>
+      </div>
+
+      <div class="controls">
+        <button id="start-match-btn" class="action-btn" onclick="runMatch()">Kick Off!</button>
+        <button id="next-stage-btn" class="action-btn hidden" onclick="nextMatch()">Next Match</button>
+      </div>
+    </div>
+
+    <div id="screen-end" class="hidden" style="text-align: center;">
+      <h2 id="end-status"></h2>
+      <button class="action-btn" onclick="location.reload()">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    const teamsData = [
+      { name: "Brazil", rating: 88, color: "#ffe600" },
+      { name: "France", rating: 87, color: "#002395" },
+      { name: "Argentina", rating: 88, color: "#74acdf" },
+      { name: "Spain", rating: 86, color: "#c60b1e" },
+      { name: "England", rating: 85, color: "#ffffff" },
+      { name: "Germany", rating: 84, color: "#222222" },
+      { name: "Portugal", rating: 84, color: "#ff0000" },
+      { name: "Netherlands", rating: 83, color: "#ff6600" },
+      { name: "Belgium", rating: 81, color: "#e30613" },
+      { name: "Uruguay", rating: 80, color: "#5bb0e6" },
+      { name: "Croatia", rating: 80, color: "#ff0000" },
+      { name: "Japan", rating: 78, color: "#000080" },
+      { name: "Senegal", rating: 77, color: "#00853f" },
+      { name: "USA", rating: 76, color: "#002868" },
+      { name: "Mexico", rating: 75, color: "#006847" },
+      { name: "Morocco", rating: 81, color: "#c1272d" }
+    ];
+
+    let myTeam = null;
+    let currentOpponent = null;
+    let playerTactic = "Balanced";
+    let tournamentStage = 0;
+    const stageNames = ["Group Match 1", "Group Match 2", "Group Match 3", "Quarter-Final", "Semi-Final", "FINAL"];
+
+    const canvas = document.getElementById('pitch');
+    const ctx = canvas.getContext('2d');
+    let homePlayers = [];
+    let awayPlayers = [];
+    let ball = { x: 300, y: 160, vx: 0, vy: 0, possessor: null, passTarget: null };
+    let defensiveStrategy = "intercept";
+    let animInterval = null;
+
+    const grid = document.getElementById('team-grid');
+    teamsData.forEach(team => {
+      const btn = document.createElement('button');
+      btn.className = 'team-btn';
+      btn.innerText = `${team.name} (${team.rating})`;
+      btn.onclick = () => selectTeam(team);
+      grid.appendChild(btn);
+    });
+
+    function selectTeam(team) {
+      myTeam = team;
+      document.getElementById('screen-select').classList.add('hidden');
+      document.getElementById('screen-match').classList.remove('hidden');
+      setupNextMatch();
+    }
+
+    function setTactic(tactic) {
+      playerTactic = tactic;
+      document.querySelectorAll('.tactic-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.innerText === tactic);
+      });
+    }
+
+    function setupNextMatch() {
+      document.getElementById('stage-title').innerText = stageNames[tournamentStage];
+      
+      const available = teamsData.filter(t => t.name !== myTeam.name);
+      currentOpponent = available[Math.floor(Math.random() * available.length)];
+
+      document.getElementById('home-team-display').innerText = myTeam.name;
+      document.getElementById('away-team-display').innerText = currentOpponent.name;
+      document.getElementById('score-display').innerText = "0 - 0";
+      document.getElementById('timer-display').innerText = "0";
+      document.getElementById('poss-display').innerText = "Loose Ball";
+      document.getElementById('match-log').innerHTML = "> Ready for kickoff...";
+      
+      document.getElementById('start-match-btn').classList.remove('hidden');
+      document.getElementById('next-stage-btn').classList.add('hidden');
+
+      initPlayers();
+      drawPitch();
+    }
+
+    function initPlayers() {
+      homePlayers = [
+        { id: 'h1', isGK: true, x: 30, y: 160, baseX: 30, baseY: 160, speed: 1.4, team: 'home' },
+        { id: 'h2', role: 'DEF', x: 100, y: 50, baseX: 100, baseY: 50, speed: 1.5, team: 'home' },
+        { id: 'h3', role: 'DEF', x: 100, y: 270, baseX: 100, baseY: 270, speed: 1.5, team: 'home' },
+        { id: 'h4', role: 'MID', x: 180, y: 160, baseX: 180, baseY: 160, speed: 1.7, team: 'home' },
+        { id: 'h5', role: 'FW', x: 260, y: 160, baseX: 260, baseY: 160, speed: 1.8, team: 'home' }
+      ];
+
+      awayPlayers = [
+        { id: 'a1', isGK: true, x: 570, y: 160, baseX: 570, baseY: 160, speed: 1.4, team: 'away' },
+        { id: 'a2', role: 'DEF', x: 500, y: 50, baseX: 500, baseY: 50, speed: 1.5, team: 'away' },
+        { id: 'a3', role: 'DEF', x: 500, y: 270, baseX: 500, baseY: 270, speed: 1.5, team: 'away' },
+        { id: 'a4', role: 'MID', x: 420, y: 160, baseX: 420, baseY: 160, speed: 1.7, team: 'away' },
+        { id: 'a5', role: 'FW', x: 340, y: 160, baseX: 340, baseY: 160, speed: 1.8, team: 'away' }
+      ];
+
+      ball = { x: 300, y: 160, vx: 0, vy: 0, possessor: null, passTarget: null };
+      defensiveStrategy = "intercept";
+    }
+
+    function drawPitch() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = 2;
+
+      ctx.strokeRect(10, 10, 580, 300);
+      ctx.beginPath();
+      ctx.moveTo(300, 10); ctx.lineTo(300, 310);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(300, 160, 40, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeRect(10, 80, 70, 160);
+      ctx.strokeRect(520, 80, 70, 160);
+
+      // Home Players
+      homePlayers.forEach(p => {
+        ctx.fillStyle = myTeam.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+      });
+
+      // Away Players
+      awayPlayers.forEach(p => {
+        ctx.fillStyle = currentOpponent.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.stroke();
+      });
+
+      // Ball
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.stroke();
+    }
+
+    function getClosestPlayer(players) {
+      let closest = null;
+      let minDist = Infinity;
+      players.forEach(p => {
+        if (p.isGK) return;
+        let dist = Math.hypot(ball.x - p.x, ball.y - p.y);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = p;
+        }
+      });
+      return closest || players[1];
+    }
+
+    function updatePositions() {
+      const allPlayers = [...homePlayers, ...awayPlayers];
+      const homeChaser = getClosestPlayer(homePlayers);
+      const awayChaser = getClosestPlayer(awayPlayers);
+
+      const ballShift = (ball.x - 300) * 0.25;
+
+      // 1. Loose / In-Flight Ball State
+      if (!ball.possessor) {
+
+        if (ball.passTarget) {
+          let target = ball.passTarget;
+          let angle = Math.atan2(target.y - ball.y, target.x - ball.x);
+          let passSpeed = 4.8;
+          
+          ball.x += Math.cos(angle) * passSpeed;
+          ball.y += Math.sin(angle) * passSpeed;
+
+          if (Math.hypot(target.x - ball.x, target.y - ball.y) < 8) {
+            ball.possessor = target;
+            ball.passTarget = null;
+            let teamName = target.team === 'home' ? myTeam.name : currentOpponent.name;
+            document.getElementById('poss-display').innerText = teamName;
+          }
+        } else {
+          ball.x += ball.vx;
+          ball.y += ball.vy;
+          ball.vx *= 0.88;
+          ball.vy *= 0.88;
+
+          allPlayers.forEach(p => {
+            let dist = Math.hypot(ball.x - p.x, ball.y - p.y);
+            if (dist < 12) {
+              ball.possessor = p;
+              ball.vx = 0; ball.vy = 0;
+              defensiveStrategy = Math.random() < 0.75 ? "intercept" : "press";
+
+              let teamName = p.team === 'home' ? myTeam.name : currentOpponent.name;
+              document.getElementById('poss-display').innerText = teamName;
+            }
+          });
+        }
+
+        allPlayers.forEach(p => {
+          let targetX = p.baseX + (p.isGK ? 0 : ballShift);
+          let targetY = p.baseY;
+
+          if (p === homeChaser || p === awayChaser) {
+            targetX = ball.x;
+            targetY = ball.y;
+          }
+
+          let angle = Math.atan2(targetY - p.y, targetX - p.x);
+          let dist = Math.hypot(targetX - p.x, targetY - p.y);
+          if (dist > 3) {
+            p.x += Math.cos(angle) * p.speed;
+            p.y += Math.sin(angle) * p.speed;
+          }
+        });
+
+      } else {
+        // 2. Controlled Ball State
+        let p = ball.possessor;
+        ball.x = p.x + 6;
+        ball.y = p.y;
+
+        // HIGH-SPEED ATTACKING DRIBBLE (3x Faster Pace for Breakthroughs)
+        let attackDir = p.team === 'home' ? 1 : -1;
+        p.x += attackDir * 1.2;
+        p.y += (Math.random() - 0.5) * 0.5;
+
+        p.x = Math.max(20, Math.min(580, p.x));
+        p.y = Math.max(20, Math.min(300, p.y));
+
+        const primaryDefender = p.team === 'home' ? awayChaser : homeChaser;
+        const defendingTeam = p.team === 'home' ? awayPlayers : homePlayers;
+
+        allPlayers.forEach(other => {
+          if (other === p) return;
+
+          let targetX = other.baseX + (other.isGK ? 0 : ballShift);
+          let targetY = other.baseY;
+
+          if (other.team !== p.team) {
+            let bufferOffset = other.team === 'home' ? -35 : 35;
+
+            if (defensiveStrategy === "press" && other === primaryDefender) {
+              targetX = p.x + bufferOffset;
+              targetY = p.y;
+            } else {
+              targetX = ((other.baseX + p.x) / 2) + bufferOffset;
+              targetY = (other.baseY + p.y) / 2;
+            }
+          }
+
+          let angle = Math.atan2(targetY - other.y, targetX - other.x);
+          let dist = Math.hypot(targetX - other.x, targetY - other.y);
+          if (dist > 4) {
+            other.x += Math.cos(angle) * (other.speed * 0.8);
+            other.y += Math.sin(angle) * (other.speed * 0.8);
+          }
+
+          // REDUCED TACKLE RATE (Defenders rarely stop breakthroughs)
+          if (other.team !== p.team && dist < 10) {
+            if (Math.random() < 0.01) { 
+              ball.possessor = other;
+              defensiveStrategy = Math.random() < 0.75 ? "intercept" : "press";
+              let teamName = other.team === 'home' ? myTeam.name : currentOpponent.name;
+              document.getElementById('poss-display').innerText = teamName;
+            }
+          }
+        });
+
+        // PASSING LOGIC
+        if (Math.random() < 0.08) {
+          let teammates = (p.team === 'home' ? homePlayers : awayPlayers).filter(t => t !== p && !t.isGK);
+          teammates.sort((a, b) => p.team === 'home' ? b.x - a.x : a.x - b.x);
+          let targetTeammate = teammates[0];
+
+          if (targetTeammate) {
+            ball.possessor = null;
+
+            if (Math.random() < 0.10) { // Reduced interception chance
+              let interceptor = defendingTeam.find(def => !def.isGK) || defendingTeam[0];
+              ball.passTarget = interceptor;
+              defensiveStrategy = Math.random() < 0.75 ? "intercept" : "press";
+              let teamName = interceptor.team === 'home' ? myTeam.name : currentOpponent.name;
+              document.getElementById('poss-display').innerText = teamName + " (Intercepted!)";
+            } else {
+              ball.passTarget = targetTeammate;
+            }
+          }
+        }
+      }
+
+      drawPitch();
+    }
+
+    function logEvent(msg) {
+      const log = document.getElementById('match-log');
+      log.innerHTML += `<br>> ${msg}`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function runMatch() {
+      document.getElementById('start-match-btn').classList.add('hidden');
+      let minute = 0;
+      let scoreA = 0;
+      let scoreB = 0;
+
+      animInterval = setInterval(updatePositions, 40);
+
+      const matchTimer = setInterval(() => {
+        minute++;
+        document.getElementById('timer-display').innerText = minute;
+
+        let attackBonus = playerTactic === "Attacking" ? 0.08 : (playerTactic === "Defensive" ? -0.02 : 0);
+        let defenseBonus = playerTactic === "Defensive" ? -0.02 : (playerTactic === "Attacking" ? 0.08 : 0);
+
+        // --- HIGH FREQUENCY BREAKTHROUGH & SHOOTING LOGIC (HOME) ---
+        let breakthroughChanceA = 0.40 + (myTeam.rating - currentOpponent.rating) * 0.005 + attackBonus;
+        if (ball.possessor && ball.possessor.team === 'home' && ball.x > 200 && Math.random() < breakthroughChanceA) {
+          
+          // Trigger Breakthrough Surge
+          if (ball.x < 420 && Math.random() < 0.50) {
+            ball.possessor.x += 60; // Instant surge through defensive line!
+            logEvent(`⚡ BREAKTHROUGH! ${myTeam.name} breaks past the defense! (${minute}')`);
+          }
+
+          // Shot Attempt
+          let isGoal = Math.random() < 0.60;
+          if (isGoal) {
+            scoreA++;
+            ball.possessor = null;
+            ball.passTarget = null;
+            ball.x = 570; ball.y = 160;
+            ball.vx = 0; ball.vy = 0;
+            logEvent(`⚽ GOAL FOR ${myTeam.name.toUpperCase()}! (${minute}')`);
+            document.getElementById('score-display').innerText = `${scoreA} - ${scoreB}`;
+          } else {
+            logEvent(`🚀 Shot by ${myTeam.name}! Saved by goalkeeper! (${minute}')`);
+            ball.possessor = awayPlayers[0];
+          }
+        }
+
+        // --- HIGH FREQUENCY BREAKTHROUGH & SHOOTING LOGIC (AWAY) ---
+        let breakthroughChanceB = 0.40 + (currentOpponent.rating - myTeam.rating) * 0.005 + defenseBonus;
+        if (ball.possessor && ball.possessor.team === 'away' && ball.x < 400 && Math.random() < breakthroughChanceB) {
+          
+          // Trigger Breakthrough Surge
+          if (ball.x > 180 && Math.random() < 0.50) {
+            ball.possessor.x -= 60; // Instant surge through defensive line!
+            logEvent(`⚡ BREAKTHROUGH! ${currentOpponent.name} breaks past the defense! (${minute}')`);
+          }
+
+          // Shot Attempt
+          let isGoal = Math.random() < 0.60;
+          if (isGoal) {
+            scoreB++;
+            ball.possessor = null;
+            ball.passTarget = null;
+            ball.x = 30; ball.y = 160;
+            ball.vx = 0; ball.vy = 0;
+            logEvent(`🚨 GOAL FOR ${currentOpponent.name.toUpperCase()}! (${minute}')`);
+            document.getElementById('score-display').innerText = `${scoreA} - ${scoreB}`;
+          } else {
+            logEvent(`🚀 Shot by ${currentOpponent.name}! Saved by goalkeeper! (${minute}')`);
+            ball.possessor = homePlayers[0];
+          }
+        }
+
+        if (minute >= 90) {
+          clearInterval(matchTimer);
+          clearInterval(animInterval);
+          
+          if (tournamentStage >= 3 && scoreA === scoreB) {
+            logEvent("⏰ Full time tie! Going to Penalty Shootout...");
+            if (Math.random() > 0.5) {
+              scoreA++;
+              logEvent(`🎯 ${myTeam.name} wins on penalties!`);
+            } else {
+              scoreB++;
+              logEvent(`❌ ${currentOpponent.name} wins on penalties!`);
+            }
+            document.getElementById('score-display').innerText = `${scoreA} - ${scoreB}`;
+          }
+
+          finishMatch(scoreA, scoreB);
+        }
+      }, 1800);
+    }
+
+    function finishMatch(scoreA, scoreB) {
+      if (scoreA > scoreB) {
+        logEvent("🏆 MATCH ENDED: YOU WIN!");
+        tournamentStage++;
+
+        if (tournamentStage >= stageNames.length) {
+          endGame(true);
+        } else {
+          document.getElementById('next-stage-btn').classList.remove('hidden');
+        }
+      } else if (scoreA < scoreB) {
+        logEvent("❌ MATCH ENDED: YOU WERE ELIMINATED!");
+        endGame(false);
+      } else {
+        logEvent("🤝 MATCH ENDED: DRAW!");
+        tournamentStage++;
+        document.getElementById('next-stage-btn').classList.remove('hidden');
+      }
+    }
+
+    function nextMatch() {
+      setupNextMatch();
+    }
+
+    function endGame(isWinner) {
+      document.getElementById('screen-match').classList.add('hidden');
+      const endScreen = document.getElementById('screen-end');
+      endScreen.classList.remove('hidden');
+
+      if (isWinner) {
+        document.getElementById('end-status').innerText = `🎉 CONGRATULATIONS! You won the World Cup with ${myTeam.name}! 🏆`;
+      } else {
+        document.getElementById('end-status').innerText = `💔 Game Over! ${myTeam.name} was knocked out.`;
+      }
+    }
+  </script>
+</body>
+</html>
